@@ -17,8 +17,8 @@ class Body:
         self.m = m  # Mass of body.
         self.xyz = position  # Array of x, y and z position of body.
         self.vxyz = velocity  # Array of x, y and z velocities of body.
-        self.axyz = [0] * 3  # Array of x, y and z acceleration of body.
         self.saved_xyz = [[], [], []]  # Array of all x, y and z position values of body.
+        self.force = [[], [], []]  # A list of all the forces, in each direction, for the body at each time step.
         self.colour = colour  # Colour of body on images.
 
     def name(self):
@@ -33,9 +33,6 @@ class Body:
     def vxyz(self):
         return self.vxyz
 
-    def axyz(self):
-        return self.axyz
-
     def saved_xyz(self):
         return self.saved_xyz
 
@@ -45,18 +42,156 @@ class Body:
     def colour(self):
         return self.colour
 
-    def accel_calc(self, other):  # Force calculation between two bodies
+    def force_calc(self, other):  # Force calculation between two bodies
         rx = self.xyz[0] - other.xyz[0]
         ry = self.xyz[1] - other.xyz[1]  # Distance between two bodies in all directions.
         rz = self.xyz[2] - other.xyz[2]
         r = rx ** 2 + ry ** 2 + rz ** 2
-        a = -(G * other.m)/r  # Total force calculation.
+        f = -(G * self.m * other.m)/r  # Total force calculation.
         theta = math.atan2(ry, rx)  # Azimuthal angle.
         phi = math.acos(rz / math.sqrt(r))  # Polar angle.
-        ax = math.cos(theta) * math.sin(phi) * a
-        ay = math.sin(theta) * math.sin(phi) * a  # Force calculation in each direction.
-        az = math.cos(phi) * a
-        return ax, ay, az
+        fx = math.cos(theta) * math.sin(phi) * f
+        fy = math.sin(theta) * math.sin(phi) * f  # Force calculation in each direction.
+        fz = math.cos(phi) * f
+        return fx, fy, fz
+
+
+class Cell:
+    def __init__(self, min_coord, width):
+        self.min_coord = []  # Coordinates of most negative vertex of the cell.
+        self.width = width  # Width of the cell.
+        self.centre = self.centre_calc()  # Centre of the cell.
+        self.no_part = 0  # Number of particles within the cell.
+        self.pp = [[], [], []]  # The x, y and z positions of all the particles in the cell.
+        self.pm = []  # Masses of all the particles in the cell.
+        self.ppm = self.ppm_calc()  # Position x mass for each particle in each dimension.
+        self.tm = np.sum(self.pm)  # Total mass of all particles in the cell.
+        self.com = self.com_calc()  # Coordinates for the centre of mass of the cell.
+        self.children = []  # Children generated from this cell.
+        self.leaf = False  # Is this cell a leaf.
+
+    def min_coord(self):
+        return self.min_coord
+
+    def width(self):
+        return self.width
+
+    def centre(self):
+        return self.centre
+
+    def no_part(self):
+        return self.no_part
+
+    def pm(self):
+        return self.pm
+
+    def tm(self):
+        return self.tm
+
+    def com(self):
+        return self.com
+
+    def children(self):
+        return self.children
+
+    def leaf(self):
+        return self.leaf
+
+    def centre_calc(self):  # Calculates the centre of the cell.
+        centre = []
+        centre[0] = self.min_coord[0] + (self.width / 2)
+        centre[1] = self.min_coord[1] + (self.width / 2)
+        centre[2] = self.min_coord[2] + (self.width / 2)
+        return centre
+        # return [
+        #     self.min_coord[0] + (self.width / 2),
+        #     self.min_coord[1] + (self.width / 2),
+        #     self.min_coord[2] + (self.width / 2)
+        # ]
+
+    def ppm_calc(self):  # Calculates position x mass of each particle in cell, to be used in finding centre of mass.
+        ppm = []
+        for j in range(len(pm)):
+            ppm[0] = pp[0][j] * pm[j]
+            ppm[1] = pp[1][j] * pm[j]
+            ppm[2] = pp[2][j] * pm[j]
+        return ppm
+
+    def com_calc(self):  # Finds centre of mass of all particles in the cell.
+        com = []
+        com[0] = self.ppm[0] / self.tm
+        com[1] = self.ppm[1] / self.tm  # Using x_com = ((x_1 * m_1) + (x_2 * m_2)) / m_1 + m_2.
+        com[2] = self.ppm[2] / self.tm
+        return com
+
+    def create_children(self):  # Creates 8 children cells as octants of the parent cell.
+        c1 = Cell([0, 0, 0], 0)  # Creates the new cell.
+        c1.min_coord[0] = self.min_coord[0]
+        c1.min_coord[1] = self.min_coord[1]  # Finds new minimum coordinates of new cell.
+        c1.min_coord[2] = self.min_coord[2] + (self.width / 2)
+        c1.width = (self.width / 2)  # Finds width of new cell.
+
+        c2 = Cell([0, 0, 0], 0)
+        c2.min_coord[0] = self.min_coord[0] + (self.width / 2)
+        c2.min_coord[1] = self.min_coord[1]
+        c2.min_coord[2] = self.min_coord[2] + (self.width / 2)
+        c2.width = (self.width / 2)
+
+        c3 = Cell([0, 0, 0], 0)
+        c3.min_coord[0] = self.min_coord[0]
+        c3.min_coord[1] = self.min_coord[1] + (self.width / 2)
+        c3.min_coord[2] = self.min_coord[2] + (self.width / 2)
+        c3.width = (self.width / 2)
+
+        c4 = Cell([0, 0, 0], 0)
+        c4.min_coord[0] = self.min_coord[0] + (self.width / 2)
+        c4.min_coord[1] = self.min_coord[1] + (self.width / 2)
+        c4.min_coord[2] = self.min_coord[2] + (self.width / 2)
+        c4.width = (self.width / 2)
+
+        c5 = Cell([0, 0, 0], 0)
+        c5.min_coord[0] = self.min_coord[0]
+        c5.min_coord[1] = self.min_coord[1]
+        c5.min_coord[2] = self.min_coord[2]
+        c5.width = (self.width / 2)
+
+        c6 = Cell([0, 0, 0], 0)
+        c6.min_coord[0] = self.min_coord[0] + (self.width / 2)
+        c6.min_coord[1] = self.min_coord[1]
+        c6.min_coord[2] = self.min_coord[2]
+        c6.width = (self.width / 2)
+
+        c7 = Cell([0, 0, 0], 0)
+        c7.min_coord[0] = self.min_coord[0]
+        c7.min_coord[1] = self.min_coord[1] + (self.width / 2)
+        c7.min_coord[2] = self.min_coord[2]
+        c7.width = (self.width / 2)
+
+        c8 = Cell([0, 0, 0], 0)
+        c8.min_coord[0] = self.min_coord[0] + (self.width / 2)
+        c8.min_coord[1] = self.min_coord[1] + (self.width / 2)
+        c8.min_coord[2] = self.min_coord[2]
+        c8.width = (self.width / 2)
+
+        self.children = [c1, c2, c3, c4, c5, c6, c7, c8]
+
+    def particle_check(self):  # Checks to see if particle is within the cell.
+        for body in bodies:  # Looping for every particle in simulation.
+            if self.min_coord[0] <= body.x < (self.min_coord[0] + self.width) and \
+                    self.min_coord[1] <= body.y < (self.min_coord[1] + self.width) and \
+                    self.min_coord[2] <= body.z < (self.min_coord[2] + self.width):  # Checking position within bounds.
+                self.no_part += 1  # Adds 1 to the particle count for that cell.
+                self.pp[0].append(body.x)
+                self.pp[1].append(body.y)  # Appends position of particle to list of coordinates for particles in cell.
+                self.pp[2].append(body.z)
+                self.pm.append(body.m)  # Appends mass of particle to list of masses of particles in the cell.
+        if self.no_part == 1 or self.no_part == 0:
+            self.leaf = True  # Sets the cell to a leaf if it contains 0 or 1 particles.
+
+
+def round_up(n, sig_fig):  # Function to round up a number to a set amount of significant figures.
+    u = 10 ** sig_fig
+    return math.ceil(n * u) / u
 
 
 def make_directories():  # Checks directories exist and makes them if not.
@@ -64,6 +199,19 @@ def make_directories():  # Checks directories exist and makes them if not.
         os.makedirs('./Forwards')
     if not os.path.exists('./Backwards'):
         os.makedirs('./Backwards')
+
+
+def initial_cell():  # Sets values for initial cell.
+    max_val = 6e21
+    for body in bodies:  # Loops through all particles finding the outermost from the centre.
+        if body.x > max_val:
+            max_val = body.x
+        elif body.y > max_val:
+            max_val = body.y  # Sets the maximum value to value of outermost particle.
+        elif body.z > max_val:
+            max_val = body.z
+    max_c = round_up(max_val, -16)  # Rounds up maximum value to ensure outermost particle is within the cell.
+    c0 = Cell([-max_c, -max_c, -max_c], (2 * max_c))  # Creates initial cell.
 
 
 def create_galaxies():  # Creates two interacting galaxies using Body class.
@@ -125,42 +273,38 @@ def read_initial_conditions():  # Reads in initial conditions, of all particles,
     file.close()                                                                         # information read from file.
 
 
-def leapfrog_initial(bodies, step, step_ke, step_pe):  # Produces kick start for the leapfrog algorithm.
+def leapfrog_initial(bodies, step):  # Produces kick start for the leapfrog algorithm.
     print("Calculating...")
     position_print(bodies, step)
-
-    if calc_energy:
-        energy_calc(bodies, step_ke, step_pe)
 
     for body in bodies:
         body.saved_xyz[0].append(body.xyz[0])
         body.saved_xyz[1].append(body.xyz[1])  # Appends initial positions of each body to a
         body.saved_xyz[2].append(body.xyz[2])  # list of saved positions for that body.
 
-    accel = {}
+    force = {}
     for body in bodies:
-        total_ax = total_ay = total_az = 0.0  # Sets force for all bodies to 0.
+        total_fx = total_fy = total_fz = 0.0  # Sets force for all bodies to 0.
         for other in bodies:
             if body is other:  # Checking that not calculating force of a body on itself.
                 continue
             if other.name != "Test":  # Does not calculate force due to ring/test particles.
-                ax, ay, az = body.accel_calc(other)
-                total_ax += ax
-                total_ay += ay  # Add together forces of al other bodies acting on that body.
-                total_az += az
-        accel[body] = (total_ax, total_ay, total_az)
-
+                fx, fy, fz = body.force_calc(other)
+                total_fx += fx
+                total_fy += fy  # Add together forces of al other bodies acting on that body.
+                total_fz += fz
+        force[body] = (total_fx, total_fy, total_fz)
     for body in bodies:  # Kick start position and velocities for all bodies.
-        body.axyz = accel[body]
+        f = force[body]
+        for i in range(len(f)):
+            body.vxyz[i] += (f[i] / body.m) * (time_step / 2)  # Calculate initial half-step velocity in each direction.
+            body.xyz[i] += body.vxyz[i] * time_step  # Uses half step in velocity to calculate new position.
+            body.saved_xyz[i].append(body.xyz[i])  # Saving new position to list of previous positions of body.
 
 
 def leapfrog(bodies):  # Updates the position and velocity of each particle using a leapfrog algorithm.
     step = 0
-
-    step_ke = []
-    step_pe = []
-
-    leapfrog_initial(bodies, step, step_ke, step_pe)
+    leapfrog_initial(bodies, step)
 
     percent = 0.0
     print(percent)
@@ -173,80 +317,30 @@ def leapfrog(bodies):  # Updates the position and velocity of each particle usin
 
         if step == no_step:
             position_print(bodies, step)
-            if calc_energy:
-                energy_print(step_ke, step_pe)
             return  # Stop simulation when all steps done.
         else:
-
+            force = {}
             for body in bodies:
-                for i in range(len(body.axyz)):
-                    body.vxyz[i] += body.axyz[i] * (time_step / 2)  # Calculates the new velocity in each direction.
-                    body.xyz[i] += body.vxyz[i] * time_step  # Uses new velocity to calculate new position.
-                    body.saved_xyz[i].append(body.xyz[i])  # Saving new position to list of previous positions of body.
-
-            accel = {}
-            for body in bodies:
-                total_ax = total_ay = total_az = 0.0  # Sets force for all bodies to 0.
+                total_fx = total_fy = total_fz = 0.0  # Sets force for all bodies to 0.
                 for other in bodies:
                     if body is other:  # Checking that not calculating force of a body on itself.
                         continue
                     if other.name != "Test":  # Does not calculate force due to ring/test particles.
-                        ax, ay, az = body.accel_calc(other)
-                        total_ax += ax
-                        total_ay += ay  # Add together forces of a other bodies acting on that body.
-                        total_az += az
-                accel[body] = (total_ax, total_ay, total_az)
+                        fx, fy, fz = body.force_calc(other)
+                        total_fx += fx
+                        total_fy += fy  # Add together forces of al other bodies acting on that body.
+                        total_fz += fz
+                force[body] = (total_fx, total_fy, total_fz)
 
             for body in bodies:
-                body.axyz = accel[body]
-                for i in range(len(body.axyz)):
-                    body.vxyz[i] += body.axyz[i] * (time_step / 2)
-
-            if calc_energy:
-                energy_calc(bodies, step_ke, step_pe)
+                f = force[body]
+                for i in range(len(f)):
+                    body.vxyz[i] += (f[i] / body.m) * time_step  # Calculates the new velocity in each direction.
+                    body.xyz[i] += body.vxyz[i] * time_step  # Uses new velocity to calculate new position.
+                    body.saved_xyz[i].append(body.xyz[i])  # Saving new position to list of previous positions of body.
 
             if step % int(interval) == 0:
                 position_print(bodies, step)  # Print information on particles to a file at a particular time.
-
-
-def energy_calc(bodies, step_ke, step_pe):
-
-    total_ke = 0
-    total_pe = 0
-
-    for body in bodies:
-        v = ((body.vxyz[0] ** 2) + (body.vxyz[1] ** 2) + (body.vxyz[2] ** 2)) ** 0.5
-        total_ke += 0.5 * body.m * v ** 2
-
-    for body in bodies:
-        for other in bodies:
-            if body is other:
-                continue
-            else:
-                r = (((body.xyz[0] - other.xyz[0]) ** 2) + ((body.xyz[1] - other.xyz[1]) ** 2) +
-                     ((body.xyz[2] - other.xyz[2]) ** 2)) ** 0.5
-                total_pe -= (G * body.m * other.m) / (2 * r)
-
-    step_ke.append(total_ke)
-    step_pe.append(total_pe)
-
-
-def energy_print(step_ke, step_pe):
-    if rewind:
-        file1 = open("Backwards/RewindKE.txt", "w+")
-    else:
-        file1 = open("Forwards/KE.txt", "w+")
-    for i in range(len(step_ke)):
-        file1.write("{0} \n".format(step_ke[i]))
-    file1.close()
-
-    if rewind:
-        file2 = open("Backwards/RewindPE.txt", "w+")
-    else:
-        file2 = open("Forwards/PE.txt", "w+")
-    for j in range(len(step_pe)):
-        file2.write("{0} \n".format(step_pe[j]))
-    file2.close()
 
 
 def info():
@@ -294,7 +388,8 @@ def path_print():
     if rewind:
         file1 = open("Backwards/RWPriGalPath.txt", "w+")
     else:
-        file1 = open("Forwards/PriGalPath.txt", "w+")  # Prints coordinates of primary galaxy at every time step to a file.
+        file1 = open("Forwards/PriGalPath.txt",
+                     "w+")  # Prints coordinates of primary galaxy at every time step to a file.
     for i in range(len(objects[0].saved_xyz[0])):
         file1.write("{0} {1} {2}\n".format(objects[0].saved_xyz[0][i], objects[0].saved_xyz[1][i],
                                            objects[0].saved_xyz[2][i]))
@@ -303,7 +398,8 @@ def path_print():
     if rewind:
         file2 = open("Backwards/RWSecGalPath.txt", "w+")
     else:
-        file2 = open("Forwards/SecGalPath.txt", "w+")  # Prints coordinates of secondary galaxy at every time step to a file.
+        file2 = open("Forwards/SecGalPath.txt",
+                     "w+")  # Prints coordinates of secondary galaxy at every time step to a file.
     for i in range(len(objects[1].saved_xyz[0])):
         file2.write("{0} {1} {2}\n".format(objects[1].saved_xyz[0][i], objects[1].saved_xyz[1][i],
                                            objects[1].saved_xyz[2][i]))

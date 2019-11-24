@@ -10,3 +10,5 @@ This code runs a simulation and outputs particle positions at image time step an
 Interaction options in IntData.
 
 Images plotted by separate function.
+
+Implementation of octree.
