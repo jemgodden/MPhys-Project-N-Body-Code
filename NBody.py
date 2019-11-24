@@ -17,8 +17,8 @@ class Body:
         self.m = m  # Mass of body.
         self.xyz = position  # Array of x, y and z position of body.
         self.vxyz = velocity  # Array of x, y and z velocities of body.
-        self.axyz = [0] * 3  # Array of x, y and z acceleration of body.
         self.saved_xyz = [[], [], []]  # Array of all x, y and z position values of body.
+        self.force = [0.0] * 3  # A list of all the forces, in each direction, for the body at each time step.
         self.colour = colour  # Colour of body on images.
 
     def name(self):
@@ -33,9 +33,6 @@ class Body:
     def vxyz(self):
         return self.vxyz
 
-    def axyz(self):
-        return self.axyz
-
     def saved_xyz(self):
         return self.saved_xyz
 
@@ -45,18 +42,27 @@ class Body:
     def colour(self):
         return self.colour
 
-    def accel_calc(self, other):  # Force calculation between two bodies
+    def force_calc(self, other):  # Force calculation between two bodies
+        fxyz = [None] * 3
         rx = self.xyz[0] - other.xyz[0]
         ry = self.xyz[1] - other.xyz[1]  # Distance between two bodies in all directions.
         rz = self.xyz[2] - other.xyz[2]
         r = rx ** 2 + ry ** 2 + rz ** 2
-        a = -(G * other.m)/r  # Total force calculation.
+        f = -(G * self.m * other.m) / r  # Total force calculation.
         theta = math.atan2(ry, rx)  # Azimuthal angle.
         phi = math.acos(rz / math.sqrt(r))  # Polar angle.
-        ax = math.cos(theta) * math.sin(phi) * a
-        ay = math.sin(theta) * math.sin(phi) * a  # Force calculation in each direction.
-        az = math.cos(phi) * a
-        return ax, ay, az
+        fxyz[0] = math.cos(theta) * math.sin(phi) * f
+        fxyz[1] = math.sin(theta) * math.sin(phi) * f  # Force calculation in each direction.
+        fxyz[2] = math.cos(phi) * f
+
+        for i in range(len(fxyz)):  # Checks whether each particle is a test and adds forces where needed.
+            if self.name != "Test" and other.name != "Test":
+                self.force[i] += fxyz[i]
+                other.force[i] -= fxyz[i]
+            if self.name != "Test" and other.name == "Test":
+                other.force[i] -= fxyz[i]
+            if self.name == "Test" and other.name != "Test":
+                self.force[i] += fxyz[i]
 
 
 def make_directories():  # Checks directories exist and makes them if not.
@@ -125,42 +131,36 @@ def read_initial_conditions():  # Reads in initial conditions, of all particles,
     file.close()                                                                         # information read from file.
 
 
-def leapfrog_initial(bodies, step, step_ke, step_pe):  # Produces kick start for the leapfrog algorithm.
+def leapfrog_initial(bodies, step):  # Produces kick start for the leapfrog algorithm.
     print("Calculating...")
     position_print(bodies, step)
-
-    if calc_energy:
-        energy_calc(bodies, step_ke, step_pe)
 
     for body in bodies:
         body.saved_xyz[0].append(body.xyz[0])
         body.saved_xyz[1].append(body.xyz[1])  # Appends initial positions of each body to a
         body.saved_xyz[2].append(body.xyz[2])  # list of saved positions for that body.
 
-    accel = {}
-    for body in bodies:
-        total_ax = total_ay = total_az = 0.0  # Sets force for all bodies to 0.
-        for other in bodies:
-            if body is other:  # Checking that not calculating force of a body on itself.
+    for i in range(len(objects) - 1):  # Loop that does not calculate each force more than once.
+        body = objects[i]
+        for j in range(i + 1, len(objects)):
+            other = objects[j]
+            if body.name == "Test" and other.name == "Test":  # Does not calculate force is both particles are test.
                 continue
-            if other.name != "Test":  # Does not calculate force due to ring/test particles.
-                ax, ay, az = body.accel_calc(other)
-                total_ax += ax
-                total_ay += ay  # Add together forces of al other bodies acting on that body.
-                total_az += az
-        accel[body] = (total_ax, total_ay, total_az)
+            else:
+                body.force_calc(other)
 
     for body in bodies:  # Kick start position and velocities for all bodies.
-        body.axyz = accel[body]
+        for i in range(len(body.force)):
+            body.vxyz[i] += (body.force[i] / body.m) * (time_step / 2)  # Calculate initial half-step velocity in each direction.
+            body.xyz[i] += body.vxyz[i] * time_step  # Uses half step in velocity to calculate new position.
+            body.saved_xyz[i].append(body.xyz[i])  # Saving new position to list of previous positions of body.
+        for j in range(len(body.force)):
+            body.force[j] = 0
 
 
 def leapfrog(bodies):  # Updates the position and velocity of each particle using a leapfrog algorithm.
     step = 0
-
-    step_ke = []
-    step_pe = []
-
-    leapfrog_initial(bodies, step, step_ke, step_pe)
+    leapfrog_initial(bodies, step)
 
     percent = 0.0
     print(percent)
@@ -173,80 +173,27 @@ def leapfrog(bodies):  # Updates the position and velocity of each particle usin
 
         if step == no_step:
             position_print(bodies, step)
-            if calc_energy:
-                energy_print(step_ke, step_pe)
             return  # Stop simulation when all steps done.
         else:
+            for i in range(len(objects) - 1):  # Loop that does not calculate each force more than once.
+                body = objects[i]
+                for j in range(i + 1, len(objects)):
+                    other = objects[j]
+                    if body.name == "Test" and other.name == "Test":  # Does not calculate force of two test particles.
+                        continue
+                    else:
+                        body.force_calc(other)
 
             for body in bodies:
-                for i in range(len(body.axyz)):
-                    body.vxyz[i] += body.axyz[i] * (time_step / 2)  # Calculates the new velocity in each direction.
+                for i in range(len(body.force)):
+                    body.vxyz[i] += (body.force[i] / body.m) * time_step  # Calculates new velocity in each direction.
                     body.xyz[i] += body.vxyz[i] * time_step  # Uses new velocity to calculate new position.
                     body.saved_xyz[i].append(body.xyz[i])  # Saving new position to list of previous positions of body.
-
-            accel = {}
-            for body in bodies:
-                total_ax = total_ay = total_az = 0.0  # Sets force for all bodies to 0.
-                for other in bodies:
-                    if body is other:  # Checking that not calculating force of a body on itself.
-                        continue
-                    if other.name != "Test":  # Does not calculate force due to ring/test particles.
-                        ax, ay, az = body.accel_calc(other)
-                        total_ax += ax
-                        total_ay += ay  # Add together forces of a other bodies acting on that body.
-                        total_az += az
-                accel[body] = (total_ax, total_ay, total_az)
-
-            for body in bodies:
-                body.axyz = accel[body]
-                for i in range(len(body.axyz)):
-                    body.vxyz[i] += body.axyz[i] * (time_step / 2)
-
-            if calc_energy:
-                energy_calc(bodies, step_ke, step_pe)
+                for j in range(len(body.force)):
+                    body.force[j] = 0
 
             if step % int(interval) == 0:
                 position_print(bodies, step)  # Print information on particles to a file at a particular time.
-
-
-def energy_calc(bodies, step_ke, step_pe):
-
-    total_ke = 0
-    total_pe = 0
-
-    for body in bodies:
-        v = ((body.vxyz[0] ** 2) + (body.vxyz[1] ** 2) + (body.vxyz[2] ** 2)) ** 0.5
-        total_ke += 0.5 * body.m * v ** 2
-
-    for body in bodies:
-        for other in bodies:
-            if body is other:
-                continue
-            else:
-                r = (((body.xyz[0] - other.xyz[0]) ** 2) + ((body.xyz[1] - other.xyz[1]) ** 2) +
-                     ((body.xyz[2] - other.xyz[2]) ** 2)) ** 0.5
-                total_pe -= (G * body.m * other.m) / (2 * r)
-
-    step_ke.append(total_ke)
-    step_pe.append(total_pe)
-
-
-def energy_print(step_ke, step_pe):
-    if rewind:
-        file1 = open("Backwards/RewindKE.txt", "w+")
-    else:
-        file1 = open("Forwards/KE.txt", "w+")
-    for i in range(len(step_ke)):
-        file1.write("{0} \n".format(step_ke[i]))
-    file1.close()
-
-    if rewind:
-        file2 = open("Backwards/RewindPE.txt", "w+")
-    else:
-        file2 = open("Forwards/PE.txt", "w+")
-    for j in range(len(step_pe)):
-        file2.write("{0} \n".format(step_pe[j]))
-    file2.close()
 
 
 def info():
@@ -294,7 +241,8 @@ def path_print():
     if rewind:
         file1 = open("Backwards/RWPriGalPath.txt", "w+")
     else:
-        file1 = open("Forwards/PriGalPath.txt", "w+")  # Prints coordinates of primary galaxy at every time step to a file.
+        file1 = open("Forwards/PriGalPath.txt",
+                     "w+")  # Prints coordinates of primary galaxy at every time step to a file.
     for i in range(len(objects[0].saved_xyz[0])):
         file1.write("{0} {1} {2}\n".format(objects[0].saved_xyz[0][i], objects[0].saved_xyz[1][i],
                                            objects[0].saved_xyz[2][i]))
@@ -303,7 +251,8 @@ def path_print():
     if rewind:
         file2 = open("Backwards/RWSecGalPath.txt", "w+")
     else:
-        file2 = open("Forwards/SecGalPath.txt", "w+")  # Prints coordinates of secondary galaxy at every time step to a file.
+        file2 = open("Forwards/SecGalPath.txt",
+                     "w+")  # Prints coordinates of secondary galaxy at every time step to a file.
     for i in range(len(objects[1].saved_xyz[0])):
         file2.write("{0} {1} {2}\n".format(objects[1].saved_xyz[0][i], objects[1].saved_xyz[1][i],
                                            objects[1].saved_xyz[2][i]))
